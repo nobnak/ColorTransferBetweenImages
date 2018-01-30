@@ -31,8 +31,9 @@ namespace ColorTransferBetweenImagesSystem {
         #endregion
 
         private void Compile() {
-            if (inputTexture == null || refTexture == null)
+            if (inputTexture == null)
                 return;
+            InputOnUpdate.Invoke(inputTexture);
 
             if (outputTexture == null
                 || inputTexture.width != outputTexture.width
@@ -41,29 +42,29 @@ namespace ColorTransferBetweenImagesSystem {
                 outputTexture = new Texture2D(inputTexture.width, inputTexture.height, TextureFormat.ARGB32, false);
             }
 
-            InputOnUpdate.Invoke(inputTexture);
-            ReferenceOnUpdate.Invoke(refTexture);
 
+            IEnumerable<Color> outputColors;
             var inputColors = inputTexture.GetPixels();
-            var refColors = refTexture.GetPixels();
-#if false
-            var outputColors = inputColors.RGBToLAB().LABToRGB().ToArray();
-#else
-            Profiler.BeginSample("Color to LAB");
-            var inputLabColors = inputColors.Select(c => c.ColorToLAB());
-            Profiler.EndSample();
-            var refLabColors = refColors.Select(c => c.ColorToLAB());
-            Vector3 inputAverage, inputSD, outputAverage, outputSD;
-            Profiler.BeginSample("Compile statistics");
-            inputLabColors.CompileLABStats(out inputAverage, out inputSD);
-            Profiler.EndSample();
-            refLabColors.CompileLABStats(out outputAverage, out outputSD);
+            if (refTexture == null) {
+                outputColors = inputColors;
+            } else {
+                ReferenceOnUpdate.Invoke(refTexture);
+                var refColors = refTexture.GetPixels();
+                Profiler.BeginSample("Color to LAB");
+                var inputLabColors = inputColors.Select(c => c.ColorToLAB());
+                Profiler.EndSample();
+                var refLabColors = refColors.Select(c => c.ColorToLAB());
+                Vector3 inputAverage, inputSD, outputAverage, outputSD;
+                Profiler.BeginSample("Compile statistics");
+                inputLabColors.CompileLABStats(out inputAverage, out inputSD);
+                Profiler.EndSample();
+                refLabColors.CompileLABStats(out outputAverage, out outputSD);
 
-            Profiler.BeginSample("Convert");
-            var outputLabColors = inputLabColors.Convert(inputAverage, inputSD, outputAverage, outputSD);
-            Profiler.EndSample();
-            var outputColors = outputLabColors.Select(l => l.LABToColor());
-#endif
+                Profiler.BeginSample("Convert");
+                var outputLabColors = inputLabColors.Convert(inputAverage, inputSD, outputAverage, outputSD);
+                Profiler.EndSample();
+                outputColors = outputLabColors.Select(l => l.LABToColor());
+            }
 
             outputTexture.SetPixels(outputColors.ToArray());
             outputTexture.Apply(false, false);
